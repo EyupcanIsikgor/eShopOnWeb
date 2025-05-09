@@ -1,0 +1,59 @@
+#NAME THE PIPELINE SAME AS FILE (WITHOUT ".yml")
+
+# Trigger CD when CI executed succesfully
+resources:
+  pipelines:
+    - pipeline: eshoponweb-ci
+      source: eShopOnWeb # given pipeline name
+      trigger: true
+
+
+variables:
+  resource-group: 'eShopOnWeb-112233'
+  location: 'germanywestcentral'
+  templateFile: 'infra/webapp.bicep'
+  subscriptionid: '48b6afc6-81c5-4f4d-8687-f8eeae1714ca'
+  azureserviceconnection: 'azure subs'
+  webappname: 'eShopOnWeb-Eyupcan'
+  # webappname: 'webapp-windows-eshop'
+  
+
+stages:
+- stage: Deploy
+  displayName: Deploy to WebApp
+  jobs:
+  - job: Deploy
+    pool:
+      vmImage: windows-latest
+    steps:
+    #download artifacts
+    - download: eshoponweb-ci
+  
+    # Deploy App Service Plan + App Service using Bicep
+    - task: AzureResourceManagerTemplateDeployment@3
+      displayName: Deploy App Service Plan Bicep
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: '$(azureserviceconnection)'
+        subscriptionId: '$(subscriptionid)'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: '$(resource-group)'
+        location: '$(location)'
+        templateLocation: 'Linked artifact'
+        csmFile: '$(templateFile)'
+        overrideParameters: '-webAppName $(webappname) -location $(location)'
+        deploymentMode: 'Incremental'
+        deploymentOutputs: 'asp-json'
+    
+    #Publish Website to Azure WebApp
+    - task: AzureRmWebAppDeployment@4
+      displayName: Publish Website to WebApp
+      inputs:
+        ConnectionType: 'AzureRM'
+        azureSubscription: '$(azureserviceconnection)'
+        appType: 'webApp'
+        WebAppName: '$(webappname)'
+        packageForLinux: '$(Pipeline.Workspace)/**/Web.zip'
+      
+
+    
